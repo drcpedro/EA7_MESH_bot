@@ -1,8 +1,6 @@
 module.exports = {
   uiPort: process.env.PORT || 1880,
-  
   credentialSecret: process.env.NODE_RED_CREDENTIAL_SECRET || "ea7-mesh-secret-2024",
-  
   adminAuth: {
     type: "credentials",
     users: [{
@@ -10,32 +8,5 @@ module.exports = {
       password: process.env.NODE_RED_PASSWORD || "$2b$08$1Z2PjDdU7sMfT3KwV6LkOeL8J9H0K1L2M3N4O5P6Q7R8S9T0U1V2W3X4Y5Z6",
       permissions: "*"
     }]
-  },
-  
-  logging: {
-    console: {
-      level: "info",
-      metrics: false,
-      audit: false
-    }
-  },
-  
-  editorTheme: {
-    projects: {
-      enabled: false
-    }
-  },
-  
-  flowFile: "flows.json",
-  
-  userDir: "/data",
-  
-  exportGlobalContextKeys: false,
-  
-  externalModules: {},
-  
-  runtimeState: {
-    enabled: false,
-    ui: false
   }
 };
