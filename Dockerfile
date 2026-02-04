@@ -1,10 +1,20 @@
-FROM nodered/node-red:3.1.0
+FROM nodered/node-red:latest
 
-# Instalar el paquete de Telegram CORRECTAMENTE
-RUN npm install node-red-contrib-telegrambot --unsafe-perm --save
+# Instalar paquetes necesarios
+RUN npm install \
+    node-red-contrib-telegrambot@latest \
+    node-red-node-base64 \
+    node-red-contrib-crypto-js \
+    --unsafe-perm
+
+# Crear directorio de usuario
+RUN mkdir -p /data && chown -R node-red:node-red /data
 
 # Puerto
 EXPOSE 1880
 
-# Comando de inicio
-CMD ["node-red"]
+# Usuario no root
+USER node-red
+
+# Comando
+CMD ["node-red", "--userDir", "/data"]
