@@ -1,82 +1,42 @@
-console.log('🤖 BOT EA7 - VERSIÓN ESTABLE CON POLLING');
-
+console.log('🤖 BOT EA7 - VERSIÓN SIMPLE Y FUNCIONAL');
 const TelegramBot = require('node-telegram-bot-api');
 const mqtt = require('mqtt');
-
-// CONFIGURACIÓN DE RENDER
-const CONFIG = {
-  TELEGRAM_TOKEN: process.env.TELEGRAM_TOKEN,
-  TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
-  NODE_ID: process.env.MESHTASTIC_NODE_ID || '!ea8eee34',
-  MQTT_HOST: process.env.MQTT_HOST || 'mqtt.meshtastic.pt',
-  MQTT_PORT: parseInt(process.env.MQTT_PORT) || 8883,
-  MQTT_USER: process.env.MQTT_USERNAME || 'EA7!',
-  MQTT_PASS: process.env.MQTT_PASSWORD || 'PTEA7!'
-};
-
-console.log('⚙️ Config:', {
-  chatId: CONFIG.TELEGRAM_CHAT_ID,
-  nodeId: CONFIG.NODE_ID
-});
-
-// VALIDAR
-if (!CONFIG.TELEGRAM_TOKEN || !CONFIG.TELEGRAM_CHAT_ID) {
-  console.error('❌ Faltan variables en Render');
+const TOKEN = process.env.TELEGRAM_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+if (!TOKEN || !CHAT_ID) {
+  console.error('❌ Faltan variables');
   process.exit(1);
 }
-
-// TELEGRAM CON POLLING
-const bot = new TelegramBot(CONFIG.TELEGRAM_TOKEN, {
-  polling: { interval: 300, autoStart: true }
-});
-
-// MQTT
+const bot = new TelegramBot(TOKEN, {polling: true});
 const mqttClient = mqtt.connect({
-  host: CONFIG.MQTT_HOST,
-  port: CONFIG.MQTT_PORT,
-  username: CONFIG.MQTT_USER,
-  password: CONFIG.MQTT_PASS,
+  host: 'mqtt.meshtastic.pt', port: 8883,
+  username: 'EA7!', password: 'PTEA7!',
   rejectUnauthorized: false
 });
-
 mqttClient.on('connect', () => {
-  console.log('✅ MQTT CONECTADO!');
+  console.log('✅ MQTT OK');
+  bot.sendMessage(CHAT_ID, '🤖 Bot EA7 ACTIVO!');
   mqttClient.subscribe('msh/EA7/2/json/#');
-  bot.sendMessage(CONFIG.TELEGRAM_CHAT_ID, '🤖 Bot EA7 ACTIVO!');
 });
-
-// MQTT → TELEGRAM
-mqttClient.on('message', (topic, message) => {
+mqttClient.on('message', (topic, msg) => {
   try {
-    const data = JSON.parse(message.toString());
+    const data = JSON.parse(msg.toString());
     if (data.type === 'text' && data.payload?.text) {
-      const msg = `📡 ${data.from}: ${data.payload.text}`;
-      bot.sendMessage(CONFIG.TELEGRAM_CHAT_ID, msg);
+      bot.sendMessage(CHAT_ID, `📡 ${data.from}: ${data.payload.text}`);
     }
-  } catch (e) {}
+  } catch(e) {}
 });
-
-// TELEGRAM → MQTT
 bot.on('message', (msg) => {
   if (msg.text && !msg.text.startsWith('/')) {
-    const mqttMsg = {
-      type: 'text',
-      payload: { text: msg.text },
-      from: CONFIG.NODE_ID
-    };
-    mqttClient.publish(`msh/EA7/2/json/${CONFIG.NODE_ID}/text`, JSON.stringify(mqttMsg));
-    bot.sendMessage(msg.chat.id, '✅ Enviado a Meshtastic!');
+    const mqttMsg = {type: 'text', payload: {text: msg.text}, from: '!ea8eee34'};
+    mqttClient.publish('msh/EA7/2/json/!ea8eee34/text', JSON.stringify(mqttMsg));
+    bot.sendMessage(msg.chat.id, '✅ Enviado!');
   }
 });
-
-// COMANDOS
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, '🤖 Bot EA7 Meshtastic activo!');
+  bot.sendMessage(msg.chat.id, '🤖 Bot EA7 activo!');
 });
-
-// HEALTH ENDPOINT
 require('http').createServer((req, res) => {
-  res.end(JSON.stringify({ status: 'ok', node: CONFIG.NODE_ID }));
+  res.end('OK');
 }).listen(process.env.PORT || 3000);
-
-console.log('✅ Bot listo en puerto', process.env.PORT || 3000);
+console.log('✅ Servidor listo');
