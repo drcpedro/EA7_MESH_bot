@@ -1,7 +1,6 @@
 {
   "name": "ea7-meshtastic-bot",
   "version": "1.0.0",
-  "description": "Puente EA7! Meshtastic MQTT a Telegram",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

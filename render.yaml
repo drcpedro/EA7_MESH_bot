@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: ea7-mesh-bot
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TELEGRAM_TOKEN
+        sync: false
+      - key: TELEGRAM_GROUP_ID
+        sync: false
+      - key: MQTT_BROKER
+        value: mqtt://145.239.69.53:1883
+      - key: MQTT_USERNAME
+        value: EA7!
+      - key: MQTT_PASSWORD
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true
