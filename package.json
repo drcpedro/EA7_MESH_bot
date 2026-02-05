@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "name": "ea7-meshtastic-bot",
   "version": "1.0.0",
   "main": "index.js",
@@ -14,4 +15,25 @@
   "engines": {
     "node": ">=18.0.0"
   }
+=======
+  "name": "ea7-mesh-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot para nodo Meshtastic",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "install-deps": "npm install"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.64.0",
+    "axios": "^1.6.7",
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "private": true
+>>>>>>> 44dd3c0efcbf4e1af28da5490f48213faf5b8bb4
 }

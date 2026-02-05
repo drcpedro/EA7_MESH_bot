@@ -5,6 +5,7 @@ services:
     buildCommand: npm install
     startCommand: npm start
     envVars:
+<<<<<<< HEAD
       - key: NODE_ENV
         value: production
       - key: TELEGRAM_TOKEN
@@ -19,3 +20,9 @@ services:
         sync: false
     healthCheckPath: /health
     autoDeploy: true
+=======
+      - key: NODE_VERSION
+        value: 18.17.0
+      - key: PORT
+        value: 3000
+>>>>>>> 44dd3c0efcbf4e1af28da5490f48213faf5b8bb4
