@@ -1,260 +1,222 @@
-const TelegramBot = require('node-telegram-bot-api');
-const express = require('express');
-const mqtt = require('mqtt');
-const app = express();
+console.log('='.repeat(60));
+console.log('🤖 BOT EA7 - VERSIÓN CORREGIDA CON POLLING');
+console.log('='.repeat(60));
 
-// ================== CONFIGURACIÓN ==================
-const TELEGRAM_TOKEN = '8482781617:AAFrS2W5SpHM-Ksx1N8oVrVHE0mbMhL3as8';
-const TELEGRAM_GROUP_ID = -4726053664;
-const TELEGRAM_ADMIN_ID = 602599168;
-
-const MQTT_CONFIG = {
-  broker: 'mqtt://145.239.69.53:1883',
-  username: 'EA7!',
-  password: 'PTEA7!',
-  topics: [
-    'msh/EA7/json',   // JSON format
-    'msh/2/json',     // JSON format (default)
-    'msh/EA7/#',      // All binary topics
-    'msh/2/#'         // All binary topics (default)
-  ],
-  clientId: 'ea7_universal_' + Math.random().toString(16).slice(2)
+// VARIABLES DE RENDER
+const CONFIG = {
+  TELEGRAM_TOKEN: process.env.TELEGRAM_TOKEN,
+  TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
+  MESHTASTIC_NODE_ID: process.env.MESHTASTIC_NODE_ID || '!ea8eee34',
+  MQTT_HOST: process.env.MQTT_HOST || 'mqtt.meshtastic.pt',
+  MQTT_PORT: parseInt(process.env.MQTT_PORT) || 8883,
+  MQTT_USER: process.env.MQTT_USERNAME || 'EA7!',
+  MQTT_PASS: process.env.MQTT_PASSWORD || 'PTEA7!'
 };
 
-// ================== INICIALIZACIÓN ==================
-console.log('🤖 BOT UNIVERSAL (JSON + Binario)');
-console.log('📡 Suscribiendo a todos los formatos...');
+console.log('⚙️ CONFIGURACIÓN CARGADA:');
+console.log('- Chat ID:', CONFIG.TELEGRAM_CHAT_ID);
+console.log('- Node ID:', CONFIG.MESHTASTIC_NODE_ID);
+console.log('- MQTT:', `${CONFIG.MQTT_HOST}:${CONFIG.MQTT_PORT}`);
 
-const bot = new TelegramBot(TELEGRAM_TOKEN, { 
-  polling: false
-});
-
-let mqttClient = null;
-
-app.use(express.json());
-
-// ================== CONEXIÓN MQTT ==================
-function connectToMQTT() {
-  console.log('🔌 Conectando a MQTT...');
-  
-  const options = {
-    clientId: MQTT_CONFIG.clientId,
-    username: MQTT_CONFIG.username,
-    password: MQTT_CONFIG.password,
-    clean: true,
-    connectTimeout: 10000
-  };
-
-  mqttClient = mqtt.connect(MQTT_CONFIG.broker, options);
-
-  mqttClient.on('connect', () => {
-    console.log('✅ Conectado a MQTT');
-    
-    // Suscribirse a todos los topics
-    MQTT_CONFIG.topics.forEach(topic => {
-      mqttClient.subscribe(topic, (err) => {
-        if (!err) {
-          console.log('📡 Suscrito a:', topic);
-        }
-      });
-    });
-    
-    // Mensaje de prueba
-    const testMsg = JSON.stringify({
-      type: 'txt',
-      text: '🤖 Bot universal conectado',
-      fromName: 'EA7_Bot_Universal',
-      timestamp: Date.now()
-    });
-    
-    mqttClient.publish('msh/EA7/json', testMsg);
-    console.log('📤 Mensaje de prueba enviado');
-  });
-
-  mqttClient.on('message', (topic, message) => {
-    console.log(`\n📨 Mensaje recibido [${topic}]`);
-    
-    // INTENTAR como JSON primero
-    try {
-      const data = JSON.parse(message.toString());
-      
-      if (data.type === 'txt' && data.text) {
-        console.log('✅ Formato JSON detectado');
-        console.log(`👤 ${data.fromName}: ${data.text}`);
-        
-        // Enviar a Telegram
-        const telegramMsg = `📡 *MENSAJE MESH (JSON)*\n\n` +
-                          `👤 ${data.fromName || 'Anónimo'}\n` +
-                          `💬 ${data.text}\n` +
-                          `🕒 ${new Date().toLocaleTimeString()}`;
-        
-        bot.sendMessage(TELEGRAM_GROUP_ID, telegramMsg, { parse_mode: 'Markdown' })
-          .then(() => console.log('✅ Enviado a Telegram'))
-          .catch(err => console.log('⚠️  Telegram:', err.message));
-          
-        return; // Salir si fue JSON exitoso
-      }
-    } catch (error) {
-      // No es JSON, es binario
-      console.log('🔢 Formato binario/protobuf detectado');
-      
-      // Mostrar información básica del mensaje binario
-      const buffer = message;
-      console.log(`📊 Tamaño: ${buffer.length} bytes`);
-      console.log(`📡 Topic: ${topic}`);
-      
-      // Extraer información básica del topic
-      const topicParts = topic.split('/');
-      if (topicParts.length >= 5) {
-        const fromNode = topicParts[1]; // EA7 o 2
-        const toNode = topicParts[3];   // LongFast, MediumFast, etc
-        const messageId = topicParts[4]; // !e71e06bd
-        
-        console.log(`📟 From: ${fromNode}`);
-        console.log(`📟 To: ${toNode}`);
-        console.log(`🆔 Message ID: ${messageId}`);
-        
-        // Intentar extraer texto si es posible (simplificado)
-        try {
-          const text = extractTextFromBinary(buffer);
-          if (text) {
-            console.log(`💬 Texto extraído: ${text}`);
-            
-            const telegramMsg = `📡 *MENSAJE MESH (Binario)*\n\n` +
-                              `📟 De nodo: ${fromNode}\n` +
-                              `📟 Para: ${toNode}\n` +
-                              `💬 ${text}\n` +
-                              `🔢 Formato: Protobuf\n` +
-                              `🕒 ${new Date().toLocaleTimeString()}`;
-            
-            bot.sendMessage(TELEGRAM_GROUP_ID, telegramMsg, { parse_mode: 'Markdown' })
-              .then(() => console.log('✅ Binario enviado a Telegram'))
-              .catch(err => console.log('⚠️  Telegram:', err.message));
-          }
-        } catch (e) {
-          console.log('⚠️  No se pudo extraer texto del binario');
-        }
-      }
-    }
-  });
+// VALIDAR
+if (!CONFIG.TELEGRAM_TOKEN || !CONFIG.TELEGRAM_CHAT_ID) {
+  console.error('❌ ERROR: Faltan variables en Render');
+  process.exit(1);
 }
 
-// Función simple para extraer texto de binario Meshtastic
-function extractTextFromBinary(buffer) {
+const TelegramBot = require('node-telegram-bot-api');
+const mqtt = require('mqtt');
+
+// 1. INICIAR BOT CON POLLING (NO WEBHOOK)
+console.log('🤖 Iniciando Telegram Bot (POLLING)...');
+const bot = new TelegramBot(CONFIG.TELEGRAM_TOKEN, {
+  polling: {
+    interval: 300,
+    autoStart: true,
+    params: {
+      timeout: 10,
+      allowed_updates: ['message']
+    }
+  }
+});
+
+console.log('✅ Bot Telegram inicializado con POLLING');
+
+// 2. CONEXIÓN MQTT
+console.log('📡 Conectando a MQTT...');
+const mqttClient = mqtt.connect({
+  host: CONFIG.MQTT_HOST,
+  port: CONFIG.MQTT_PORT,
+  username: CONFIG.MQTT_USER,
+  password: CONFIG.MQTT_PASS,
+  rejectUnauthorized: false,
+  clientId: `ea7-bot-${Date.now()}`
+});
+
+mqttClient.on('connect', () => {
+  console.log('✅ CONEXIÓN MQTT EXITOSA!');
+  
+  // Suscribirse a mensajes Meshtastic
+  const topics = [
+    'msh/EA7/2/json/#',
+    'msh/EA7/2/text/#'
+  ];
+  
+  topics.forEach(topic => {
+    mqttClient.subscribe(topic, (err) => {
+      if (!err) console.log(`📡 Suscrito a: ${topic}`);
+    });
+  });
+  
+  // Notificar a Telegram que estamos listos
+  bot.sendMessage(CONFIG.TELEGRAM_CHAT_ID,
+    '🤖 *Bot EA7 ACTIVO!*\n\n' +
+    '✅ *Conectado a Meshtastic*\n' +
+    '📡 *Listo para enviar/recibir mensajes*\n\n' +
+    '📊 /status - Ver estado\n' +
+    '🆘 /help - Ayuda',
+    { parse_mode: 'Markdown' }
+  );
+});
+
+mqttClient.on('error', (err) => {
+  console.error('❌ Error MQTT:', err.message);
+});
+
+// 3. RECIBIR MENSAJES DE MESHTASTIC → TELEGRAM
+mqttClient.on('message', (topic, message) => {
   try {
-    // Buscar texto en el buffer (simplificado)
-    const bufferStr = buffer.toString('latin1');
+    const msgStr = message.toString();
+    console.log(`📥 [${topic}] ${msgStr.substring(0, 100)}...`);
     
-    // Buscar patrones comunes
-    const textMatch = bufferStr.match(/[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s.,!?¡¿]{3,}/);
-    if (textMatch) {
-      return textMatch[0].substring(0, 100); // Limitar a 100 caracteres
+    const data = JSON.parse(msgStr);
+    if (data.type === 'text' && data.payload?.text) {
+      const from = data.from || 'Desconocido';
+      const text = `📡 *${from}*:\n${data.payload.text}`;
+      
+      bot.sendMessage(CONFIG.TELEGRAM_CHAT_ID, text, { parse_mode: 'Markdown' });
     }
-    
-    // Intentar como UTF-8
-    const utf8Str = buffer.toString('utf8', 0, Math.min(buffer.length, 200));
-    const cleanStr = utf8Str.replace(/[^\x20-\x7EáéíóúÁÉÍÓÚñÑ]/g, ' ').trim();
-    if (cleanStr.length > 3) {
-      return cleanStr.substring(0, 100);
+  } catch (e) {
+    // Si no es JSON, puede ser texto plano
+    if (message.toString().trim().length > 0) {
+      bot.sendMessage(CONFIG.TELEGRAM_CHAT_ID, `📡 ${message.toString().trim()}`);
     }
-    
-    return null;
-  } catch (error) {
-    return null;
   }
-}
-
-// ================== TELEGRAM ==================
-bot.onText(/\/status/, (msg) => {
-  const status = `🤖 *BOT UNIVERSAL EA7*\n\n` +
-                `📡 Conectado a MQTT\n` +
-                `🔗 Broker: 145.239.69.53:1883\n` +
-                `👤 Usuario: EA7!\n` +
-                `🔄 Soporta: JSON + Binario\n\n` +
-                `⚠️ *IMPORTANTE:* Tu nodo está enviando en formato binario.\n` +
-                `Para mejor compatibilidad, configura tu nodo:\n` +
-                `\`meshtastic --set mqtt.json_enabled true\``;
-  
-  bot.sendMessage(msg.chat.id, status, { parse_mode: 'Markdown' });
 });
 
-// Enviar mensajes a MQTT (siempre en JSON)
+// 4. RECIBIR MENSAJES DE TELEGRAM → MESHTASTIC
 bot.on('message', (msg) => {
-  if (msg.chat.id !== TELEGRAM_GROUP_ID || !msg.text || msg.text.startsWith('/')) return;
-  
-  if (mqttClient && mqttClient.connected) {
-    const meshMessage = JSON.stringify({
-      type: 'txt',
-      text: msg.text,
-      from: msg.from.id,
-      fromName: msg.from.first_name || 'Telegram',
-      timestamp: Date.now()
-    });
+  // Ignorar comandos que empiezan con /
+  if (msg.text && !msg.text.startsWith('/')) {
+    console.log(`📤 Telegram → Meshtastic: "${msg.text}"`);
     
-    mqttClient.publish('msh/EA7/json', meshMessage);
-    console.log(`📤 Telegram → MQTT (JSON): ${msg.text.substring(0, 50)}...`);
+    if (!mqttClient.connected) {
+      bot.sendMessage(msg.chat.id, '❌ Error: No conectado a MQTT');
+      return;
+    }
+    
+    const mqttMsg = {
+      type: 'text',
+      payload: {
+        text: msg.text,
+        wantAck: false,
+        wantResponse: false
+      },
+      channel: 0,
+      from: CONFIG.MESHTASTIC_NODE_ID,
+      to: 0xFFFFFFFF  // Broadcast a todos
+    };
+    
+    const topic = `msh/EA7/2/json/${CONFIG.MESHTASTIC_NODE_ID}/text`;
+    mqttClient.publish(topic, JSON.stringify(mqttMsg));
+    
+    bot.sendMessage(msg.chat.id, '✅ Enviado a red Meshtastic!');
   }
 });
 
-// ================== SERVICIO WEB ==================
-app.get('/', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>EA7 Bot Universal</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        .warning { color: #d35400; background: #fef5e7; padding: 10px; border-radius: 5px; }
-        .info { color: #2980b9; background: #ebf5fb; padding: 10px; border-radius: 5px; }
-      </style>
-    </head>
-    <body>
-      <h1>🤖 EA7 Bot Universal</h1>
-      <div class="info">
-        <strong>✅ CONECTADO</strong><br>
-        Broker: 145.239.69.53:1883<br>
-        Usuario: EA7!<br>
-        Estado: Recibiendo mensajes
-      </div>
-      <div class="warning">
-        <strong>⚠️ AVISO IMPORTANTE</strong><br>
-        Tu nodo está enviando mensajes en formato <strong>BINARIO/PROTOBUF</strong>.<br>
-        Para mejor compatibilidad, configura tu nodo:<br>
-        <code>meshtastic --set mqtt.json_enabled true</code>
-      </div>
-      <p><a href="/health">Health Check</a></p>
-    </body>
-    </html>
-  `);
+// 5. COMANDOS DE TELEGRAM
+bot.onText(/\/start/, (msg) => {
+  bot.sendMessage(msg.chat.id,
+    '🤖 *Bot EA7 Meshtastic*\n\n' +
+    'Envía cualquier mensaje para transmitir a la red.\n' +
+    'Los mensajes de Meshtastic llegarán aquí automáticamente.\n\n' +
+    '📊 /status - Estado de conexión\n' +
+    '🧪 /test - Enviar mensaje de prueba\n' +
+    '🆘 /help - Mostrar ayuda',
+    { parse_mode: 'Markdown' }
+  );
 });
 
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    mqtt: mqttClient ? mqttClient.connected : false,
-    format: 'universal (json + binary)',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// ================== INICIAR ==================
-const PORT = process.env.PORT || 3002;
-app.listen(PORT, () => {
-  console.log(`🚀 Bot Universal en puerto ${PORT}`);
-  console.log(`🌐 Web: http://localhost:${PORT}`);
-  console.log('\n' + '='.repeat(60));
-  console.log('⚠️  IMPORTANTE: Tu nodo envía mensajes en BINARIO');
-  console.log('   Ejecuta: meshtastic --set mqtt.json_enabled true');
-  console.log('='.repeat(60) + '\n');
+bot.onText(/\/status/, (msg) => {
+  const mqttStatus = mqttClient.connected ? '✅ CONECTADO' : '❌ DESCONECTADO';
+  const uptime = process.uptime();
+  const hours = Math.floor(uptime / 3600);
+  const minutes = Math.floor((uptime % 3600) / 60);
   
-  connectToMQTT();
+  bot.sendMessage(msg.chat.id,
+    `*📊 ESTADO DEL BOT EA7*\n\n` +
+    `🔌 *MQTT:* ${mqttStatus}\n` +
+    `🌐 *Broker:* ${CONFIG.MQTT_HOST}:${CONFIG.MQTT_PORT}\n` +
+    `🆔 *Nodo:* ${CONFIG.MESHTASTIC_NODE_ID}\n` +
+    `⏱️ *Uptime:* ${hours}h ${minutes}m\n` +
+    `👤 *Chat ID:* ${CONFIG.TELEGRAM_CHAT_ID}`,
+    { parse_mode: 'Markdown' }
+  );
 });
 
-process.on('SIGINT', () => {
-  console.log('\n🛑 Deteniendo bot...');
-  if (mqttClient) {
-    mqttClient.end();
+bot.onText(/\/test/, (msg) => {
+  if (!mqttClient.connected) {
+    bot.sendMessage(msg.chat.id, '❌ No conectado a MQTT');
+    return;
   }
-  process.exit(0);
+  
+  const testMsg = {
+    type: 'text',
+    payload: { text: '✅ Prueba desde Bot EA7' },
+    channel: 0,
+    from: CONFIG.MESHTASTIC_NODE_ID,
+    to: 0xFFFFFFFF
+  };
+  
+  const topic = `msh/EA7/2/json/${CONFIG.MESHTASTIC_NODE_ID}/text`;
+  mqttClient.publish(topic, JSON.stringify(testMsg));
+  
+  bot.sendMessage(msg.chat.id, '🧪 Mensaje de prueba enviado a Meshtastic');
 });
+
+bot.onText(/\/help/, (msg) => {
+  bot.sendMessage(msg.chat.id,
+    `*🆘 AYUDA - BOT EA7*\n\n` +
+    `*Comandos:*\n` +
+    `/start - Mensaje de bienvenida\n` +
+    `/status - Estado actual\n` +
+    `/test - Enviar prueba\n` +
+    `/help - Esta ayuda\n\n` +
+    `*Uso:*\n` +
+    `Envía cualquier texto para transmitir a Meshtastic\n\n` +
+    `*Configuración:*\n` +
+    `Nodo: ${CONFIG.MESHTASTIC_NODE_ID}\n` +
+    `Chat ID: ${CONFIG.TELEGRAM_CHAT_ID}`,
+    { parse_mode: 'Markdown' }
+  );
+});
+
+// 6. HEALTH ENDPOINT PARA RENDER
+const http = require('http');
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    status: 'online',
+    service: 'EA7 Meshtastic Bot',
+    node: CONFIG.MESHTASTIC_NODE_ID,
+    chat_id: CONFIG.TELEGRAM_CHAT_ID,
+    mqtt: mqttClient.connected ? 'connected' : 'disconnected',
+    uptime: process.uptime()
+  }));
+}).listen(process.env.PORT || 3000, () => {
+  console.log(`🌐 Health endpoint en puerto ${process.env.PORT || 3000}`);
+  console.log(`🔗 URL: https://ea7-mesh-bot-1.onrender.com`);
+});
+
+console.log('✅ Bot completamente inicializado y listo!');
+console.log('='.repeat(60));
